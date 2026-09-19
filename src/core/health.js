@@ -227,8 +227,20 @@ async function _probeCdp(cdpPort) {
   });
 }
 
+// Child env for TradingView: a copy of process.env without ELECTRON_RUN_AS_NODE.
+// VS Code-family extension hosts (and anything they spawn) set it; if inherited,
+// TradingView's Electron binary runs as plain Node and exits immediately with
+// "bad option: --remote-debugging-port". Windows env names are case-insensitive.
+function _childEnv() {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (key.toUpperCase() === 'ELECTRON_RUN_AS_NODE') delete env[key];
+  }
+  return env;
+}
+
 function _spawnDetached(spawnFn, exe, args) {
-  const child = spawnFn(exe, args, { detached: true, stdio: 'ignore' });
+  const child = spawnFn(exe, args, { detached: true, stdio: 'ignore', env: _childEnv() });
   child.unref();
   return child;
 }

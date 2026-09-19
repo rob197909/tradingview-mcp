@@ -106,6 +106,30 @@ describe('launch() — MSIX WindowsApps handling', { skip: !onWindows }, () => {
     assert.equal(state.copies.length, 0);
   });
 
+  it('strips ELECTRON_RUN_AS_NODE from every spawned env (direct and copy fallback)', async () => {
+    const saved = { run: process.env.ELECTRON_RUN_AS_NODE, sentinel: process.env.TV_LAUNCH_TEST_SENTINEL };
+    process.env.ELECTRON_RUN_AS_NODE = '1';
+    process.env.TV_LAUNCH_TEST_SENTINEL = 'kept';
+    try {
+      // Direct spawn never binds CDP, so launch() spawns twice: WindowsApps, then the local copy.
+      const { deps, state } = msixDeps({ cdpBindsFor: ['tradingview-mcp'] });
+      const envs = [];
+      const spawnMock = deps.spawn;
+      deps.spawn = (exe, args, opts) => { envs.push(opts?.env); return spawnMock(exe, args, opts); };
+      await launch({ _deps: deps });
+      assert.equal(state.spawned.length, 2);
+      for (const env of envs) {
+        assert.ok(env, 'spawn received an explicit env');
+        assert.ok(!Object.keys(env).some((k) => k.toUpperCase() === 'ELECTRON_RUN_AS_NODE'));
+        assert.equal(env.TV_LAUNCH_TEST_SENTINEL, 'kept', 'rest of process.env is passed through');
+      }
+      assert.equal(process.env.ELECTRON_RUN_AS_NODE, '1', 'process.env itself is not mutated');
+    } finally {
+      if (saved.run === undefined) delete process.env.ELECTRON_RUN_AS_NODE; else process.env.ELECTRON_RUN_AS_NODE = saved.run;
+      if (saved.sentinel === undefined) delete process.env.TV_LAUNCH_TEST_SENTINEL; else process.env.TV_LAUNCH_TEST_SENTINEL = saved.sentinel;
+    }
+  });
+
   it('returns cdp_ready:false warning when nothing binds', async () => {
     const { deps } = msixDeps({});
     const result = await launch({ _deps: deps });
