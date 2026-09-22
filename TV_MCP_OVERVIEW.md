@@ -85,7 +85,8 @@ only through the tool/CLI layers, not the public core API.
 - **CLI:** `src/cli/index.js` — imports 15 command modules for their register side-effects, then
   `await run(process.argv)` (`src/cli/index.js:13-31`); binary name `tv` (`package.json:7-9`).
 
-### Runs as an MCP server — 78 tools
+### Runs as an MCP server — 86 tools *(was 84 before the W1 alert tools below, 2026-09-22 — see
+total-count note further down for a correction to this document's earlier 78/70/68 claims)*
 All handlers share the shape `try { return jsonResult(await core.fn(args)); } catch (err) { return
 jsonResult({success:false, error:err.message}, true); }` and emit **one pretty-printed-JSON text
 block** via `jsonResult` (`src/tools/_format.js:5-10`). No zod schema uses `.default()`; documented
@@ -135,7 +136,11 @@ block** via `jsonResult` (`src/tools/_format.js:5-10`). No zod schema uses `.def
 **drawing.js (5)** `src/tools/drawing.js` — `draw_shape` (`shape`, `point{time,price}`, `point2?`, `overrides?`, `text?`) `:6-11`,
 `draw_list` `:17`, `draw_clear` `:22`, `draw_remove_one` (`entity_id`) `:27`, `draw_get_properties` (`entity_id`) `:34`.
 
-**alerts.js (3)** `src/tools/alerts.js` — `alert_create` (`condition`, `price`, `message?`) `:6-9`, `alert_list` `:15`, `alert_delete` (`delete_all?`) `:20`.
+**alerts.js (5)** `src/tools/alerts.js` — `alert_create` (`condition`, `price`, `message?`) `:6-9`, `alert_list` `:15`,
+`alert_delete` (`delete_all?`) `:20`, `alert_create_study` (`study_id`, `plot`, `condition`, `value`, `frequency?`,
+`resolution?`, `message?`, `dry_run?` default true) `:32-44` *(added W1 backlog, 2026-09-22)*, `alert_update`
+(`alert_id`, `condition?`, `value?`, `frequency?`, `resolution?`, `message?`, `active?`, `dry_run?` default true)
+`:46-58` *(added W1 backlog, 2026-09-22)*.
 
 **batch.js (1)** `src/tools/batch.js` — `batch_run` — `symbols` (string[]), `timeframes?` (string[]), `action` (string), `delay_ms?`, `ohlcv_count?` — `:6-11`
 
@@ -156,10 +161,15 @@ Note: `layout_list`/`layout_switch` live in `ui.js`, not a `layout.js`.
 
 **tab.js (4)** `src/tools/tab.js` — `tab_list` `:6`, `tab_new` `:11`, `tab_close` `:16`, `tab_switch` (`index`) `:21`.
 
-**Total registered = 78** (health 4 + chart 10 + pine 12 + data 12 + capture 1 + drawing 5 +
-alerts 3 + batch 1 + replay 6 + indicators 2 + watchlist 2 + ui 12 + pane 4 + tab 4). The
-docstrings disagree: `src/server.js:25` and README say **78**, `src/cli/index.js:8` says **70**,
-`CLAUDE.md:1`/header says **68** — the 78 count from the registration files is authoritative.
+**Total registered = 86** (health 4 + chart 10 + pine 12 + data 12 + capture 1 + drawing 5 +
+alerts 5 + batch 1 + replay 6 + indicators 2 + watchlist 2 + ui 12 + pane 4 + tab 4), up from 84 with
+`alert_create_study`/`alert_update` added 2026-09-22 (W1 backlog). **Correction to this document's
+prior claim:** it previously said `src/server.js:25` and README claim 78 and `CLAUDE.md:1` claims 68
+— live re-check (2026-09-22) shows `src/server.js:25`, README, and `CLAUDE.md:1` all already said
+**84** before this change (updated independently of this document at some point after the 2026-09-18
+rebase, never re-verified here until now). `src/cli/index.js:8` still says **70**. None of those three
+docstrings were bumped to 86 by the W1 change — out of scope for that task, left for a future pass.
+The count from the registration files, re-derived above, is authoritative.
 
 Params typed as free-form `z.string()` (not enum), so out-of-range values are validated only in
 core: `chart_set_type.chart_type`, `capture_screenshot.region`/`method`, `alert_create.condition`,
@@ -240,9 +250,11 @@ and **fragile DOM/CDP-input automation** (`document.querySelector` on class-subs
 | Indicator inputs **get** | — | only embedded inside `setInputs`; no standalone reader | MISSING as standalone |
 | Layout switch (saved cloud charts) | `ui.layoutList`/`ui.layoutSwitch` (`core/ui.js:104`,`:120`) | model `getSavedCharts`/`loadChartFromServer` + DOM dialog dismiss | COMPLETE (dialog dismiss fragile) |
 | Replay (start/step/stop/status/autoplay/trade) | `replay.*` (`core/replay.js`) | model `_replayApi`; autoplay speed validated first | COMPLETE (most hardened module) |
-| Alert create | `alerts.create` (`core/alerts.js:6`) | DOM + keyboard; **`condition` param ignored** (`alerts.js:72`) | PARTIAL |
-| Alert list | `alerts.list` (`core/alerts.js:75`) | REST `pricealerts.tradingview.com` `credentials:'include'` | COMPLETE |
-| Alert delete | `alerts.deleteAlerts` (`core/alerts.js:106`) | opens context menu only; individual delete throws "not yet supported" `:122` | STUBBED |
+| Alert create (price) | `alerts.create` (`core/alerts.js:18`) | REST `POST /create_alert`, `credentials:'include'`; `condition` mapped via `CONDITION_TYPE_MAP` and applied to the payload | COMPLETE — this doc's prior "`condition` param ignored / DOM + keyboard" claim (`alerts.js:72`) does not match current source; superseded, not re-audited further |
+| Alert list | `alerts.list` (`core/alerts.js:66`) | REST `pricealerts.tradingview.com` `credentials:'include'` | COMPLETE |
+| Alert delete | `alerts.deleteAlerts` (`core/alerts.js:97`) | REST `POST /delete_alerts` | COMPLETE — this doc's prior "opens context menu only / STUBBED" claim (`alerts.js:106-122`) does not match current source; superseded, not re-audited further |
+| Alert create (indicator-condition) | `alerts.createStudyAlert` (`core/alerts.js`) *(added W1 backlog, 2026-09-22)* | REST `POST /create_alert`; study series (`pine_id`, `pine_version`, inputs, `plot_id`, `offsets_by_plot`) read live from the study's `stateForAlertAsync()`; `dry_run` default true | COMPLETE — live-verified 2026-09-22: dry-run payload for `JJayFq` (Implied Volatility Percentile) cross_up/60/on_bar_close/1D on COINBASE:BTCUSD byte-matched the corresponding fields of live reference alert 3683628369; `dry_run:false` created alert 5666009794, confirmed via `alert_list`, then deleted — see §8 |
+| Alert update | `alerts.updateAlert` (`core/alerts.js`) *(added W1 backlog, 2026-09-22)* | REST `POST /modify_restart_alert` (+ `/stop_alerts` if patch keeps `active:false`); patches only supplied fields onto the alert fetched via the same call `alert_list` uses; requires the alert's study to be on the current chart; `dry_run` default true | COMPLETE — live-verified 2026-09-22: patched only `message` on alert 5666009794, condition/value/resolution unchanged per `alert_list` before/after |
 | Batch multi-symbol | `batch.batchRun` (`core/batch.js:13`) | model `exportData` + CDP screenshot; `get_strategy_results` = DOM scrape | COMPLETE (1 fragile branch) |
 | Panes / split-grid | `pane.*` (`core/pane.js`) | model `_chartWidgetCollection.setLayout` | COMPLETE — **not exported from core/index** |
 | Tabs | `tab.*` (`core/tab.js`) | CDP `/json/list`,`/json/activate` + Ctrl+T/W keyboard | COMPLETE — **not exported** |
@@ -255,10 +267,12 @@ and **fragile DOM/CDP-input automation** (`document.querySelector` on class-subs
 | Quote / OHLCV / study values / Pine graphics | `data.*` (`core/data.js`) | model (see §4) | COMPLETE |
 
 **Robust (internal-model) capabilities:** symbol/timeframe/type, indicator add/remove + inputs +
-visibility, drawings, replay, pane layout, chart-state/quote/OHLCV/study-value reads, alert `list`,
-layout `getSavedCharts`. **Fragile (DOM-dependent) capabilities:** alerts create/delete, watchlist
-get/add, batch `get_strategy_results`, screenshot region clip, all `ui.*`, `layout_switch` dialog
-dismissal, `pane.focus` (`_mainDiv`), `stream` graphics traversal, `health.uiState` button scan.
+visibility, drawings, replay, pane layout, chart-state/quote/OHLCV/study-value reads, alert
+`list`/`create`/`delete`/`create_study`/`update` (all REST `pricealerts.tradingview.com`, not DOM —
+correcting this doc's prior claim), layout `getSavedCharts`. **Fragile (DOM-dependent)
+capabilities:** watchlist get/add, batch `get_strategy_results`, screenshot region clip, all `ui.*`,
+`layout_switch` dialog dismissal, `pane.focus` (`_mainDiv`), `stream` graphics traversal,
+`health.uiState` button scan.
 
 ✅ Section 3 complete.
 
@@ -581,12 +595,24 @@ CLI examples: `tv status`, `tv quote ES1!`, `tv symbol AAPL`, `tv ohlcv -n 20 --
    these throw `evaluate is not defined`. **Net effect: `chart_get_visible_range`,
    `chart_scroll_to_date`, and `symbol_info` are non-functional.** *(Independently confirmed against
    a direct read of `src/core/chart.js`.)*
-2. **`alert_create` silently ignores its `condition` param** — it is accepted and echoed but never
-   applied to the dialog (`src/core/alerts.js:72`). Alerts are created with TradingView's default
-   condition regardless of input.
-3. **Alert deletion is effectively stubbed** — `delete_all` only opens a context menu and returns a
-   "requires manual confirmation" note; individual delete throws "Individual alert deletion not yet
-   supported" (`src/core/alerts.js:106-122`).
+2. **[RESOLVED, live-checked 2026-09-22] `alert_create` silently ignores its `condition` param** —
+   this claimed DOM-dialog behavior at `alerts.js:72` does not exist in the current source: `create()`
+   (`src/core/alerts.js:18`) sends `condition` through `CONDITION_TYPE_MAP` into the REST
+   `/create_alert` payload's `conditions[0].type`, and it is honored. Unknown when this was fixed
+   relative to the `dc7f294` audit this document was originally written against — flagging as a
+   documentation error rather than claiming credit for a fix made in this session. **Separately, the
+   real limitation this item's W1 backlog task existed to close — `alert_create` only builds *price*
+   alerts, with no way to alert on an indicator/Pine-study plot — is now closed**: `alert_create_study`
+   and `alert_update` (`src/core/alerts.js`, `src/tools/alerts.js`) add indicator-condition alert
+   create/update, reverse-engineered from `alert_list`'s payload shape and a live study's
+   `stateForAlertAsync()`. Live-verified end-to-end (create → list-verify → update → list-verify →
+   delete → confirm gone) on a throwaway alert against COINBASE:BTCUSD study `JJayFq`; see the new
+   capabilities-table rows above.
+3. **[RESOLVED, live-checked 2026-09-22] Alert deletion is effectively stubbed** — this claimed
+   context-menu/"not yet supported" behavior at `alerts.js:106-122` does not exist in the current
+   source: `deleteAlerts()` sends `alert_ids` to REST `/delete_alerts` and works for both a single id
+   and `delete_all`; live-verified in this session (§ above). Same caveat as item 2: flagging a stale
+   claim, not claiming a fix.
 4. **`stream` / `pane` / `tab` are missing from the public core export** (`src/core/index.js:5-16`),
    so `tradingview-mcp/core` consumers cannot reach panes, tabs, or streaming.
 5. **`[2026-09-18]` `tv_launch` breaks when `ELECTRON_RUN_AS_NODE` is inherited.** (The earlier item
@@ -618,10 +644,18 @@ CLI examples: `tv status`, `tv quote ES1!`, `tv symbol AAPL`, `tv ohlcv -n 20 --
   `TV_CDP_HOST`/`TV_CDP_PORT` (`src/connection.js:5-9`). Still hardcoded to `localhost:9222`:
   `scripts/pine_pull.js:6,9` and `scripts/pine_push.js:9,12`. `tv_launch --port` still does not move
   the connection layer by itself; set `TV_CDP_PORT` to the same value.
-- **Doc/count contradictions:** tool count 68 (`CLAUDE.md`) vs 70 (`src/cli/index.js:8`) vs 78
-  (`src/server.js:25`, README); advertised pane layouts (6) understate implemented (18).
+- **Doc/count contradictions:** tool count 70 (`src/cli/index.js:8`) vs 84 (`CLAUDE.md`,
+  `src/server.js:25`, README — corrected 2026-09-22; this doc previously and wrongly claimed 68/78
+  here) vs **86 actual** as of the W1 alert tools (2026-09-22, not yet reflected in any of those three
+  docstrings — see the tool-table total-count note above); advertised pane layouts (6) understate
+  implemented (18).
+- **`alert_update` requires the alert's study to be on the current chart** (`src/core/alerts.js`,
+  `updateAlert`) — added 2026-09-22 as a blanket safety check alongside `alert_create_study`, but it's
+  unnecessarily strict for patches that don't touch the condition (e.g. `message`-only or
+  `active`-only updates need no chart-side study lookup at all). Backlog: relax to only require the
+  study lookup when `condition`, `value`, `frequency`, or `resolution` is being patched.
 - **"Local only / no TradingView servers" claims are not strictly true** — `alerts.list` calls
-  `pricealerts.tradingview.com` with `credentials:'include'` (`src/core/alerts.js:78`),
+  `pricealerts.tradingview.com` with `credentials:'include'` (`src/core/alerts.js:66`),
   `symbol_search` calls `symbol-search.tradingview.com` (`src/core/chart.js:225`), and `pine_check`
   uses `pine-facade.tradingview.com` (`src/connection.js:26`), contradicting `README.md:19,:187` and
   `CONTRIBUTING.md:23`.
